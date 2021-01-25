@@ -27,9 +27,90 @@ class Planet
 
 class OrreryArm
 {
-    public GameObject m_GameObject;
-    public GameObject m_ChildArm;
+    public Transform orreryTransform;
+
+    public GameObject m_BaseArm;
+    public GameObject m_UpperArm;
+
+    public float m_BaseArmLength;
+    public float m_UpperArmLength;
+
+    public Vector3 m_ArmStartPosition;
+    public GameObject m_Joint;
+    public GameObject m_StartJoint;
+
     public Planet m_Planet;
+
+    public void MoveArm(bool drawDebugLines = false)
+    {
+        // Move from target (ie planet) to start | joint toward planet, start toward joint
+        if (m_Joint == null)
+        {
+            Debug.Log("Joint is null");
+        }
+        if (m_StartJoint == null)
+        {
+            Debug.Log("Startjoint is null");
+        }
+        if (m_Planet == null)
+        {
+            Debug.Log("planet is null");
+        }
+        SolveIK(m_Joint.transform, m_Planet.m_GameObject.transform, m_UpperArmLength);
+        SolveIK(m_StartJoint.transform, m_Joint.transform, m_BaseArmLength);
+
+        // Set start back to it's original pos
+        m_StartJoint.transform.localPosition = m_ArmStartPosition;
+
+        // Move from start to end | joint toward start
+        SolveIK(m_Joint.transform, m_StartJoint.transform, m_BaseArmLength);
+
+        UpdateArmPositions();
+
+        if (drawDebugLines)
+        {
+
+            // Calculate normalized vector between joint and planet
+            Vector3 dir = m_Joint.transform.position - m_Planet.m_GameObject.transform.position;
+            dir = dir.normalized;
+
+            // Start to joint
+            Debug.DrawLine(m_StartJoint.transform.position, m_Joint.transform.position, Color.green);
+            // Joint to planet
+            Debug.DrawLine(m_Joint.transform.position, m_Joint.transform.position - (dir * m_UpperArmLength), Color.red);
+        }
+    }
+
+    public void UpdateArmPositions()
+    {
+        // Calculate normalized vector between joint and planet
+        Vector3 dir = m_Joint.transform.position - m_Planet.m_GameObject.transform.position;
+        dir = dir.normalized;
+
+        SetPos(m_BaseArm.transform, m_StartJoint.transform.position, m_Joint.transform.position);
+        SetPos(m_UpperArm.transform, m_Joint.transform.position, m_Joint.transform.position - (dir * m_UpperArmLength));
+    }
+
+    private void SolveIK(Transform start, Transform target, float armLength)
+    {
+        Vector3 dir = target.position - start.position;
+
+        dir = dir.normalized;
+
+        start.position = target.position - (dir * armLength);
+    }
+
+    void SetPos(Transform transform, Vector3 start, Vector3 end)
+    {
+        Vector3 middlePoint = (start + end) * 0.5f;
+
+        transform.LookAt(end);
+        transform.position = middlePoint;
+
+
+        // transform.rotation = Quaternion.LookRotation(m_Joint.transform.localPosition - transform.localPosition, Vector3.up);
+        Debug.DrawLine(start, (start + end) * 0.5f, Color.blue);
+    }
 }
 
 public class RobinOrrery : MonoBehaviour
@@ -56,6 +137,9 @@ public class RobinOrrery : MonoBehaviour
     [SerializeField] float m_ArmEndPosition = 2.5f;
     [SerializeField] float m_ArmToPlanetRadiusSizeScalar = 13.0f;
     [SerializeField] float m_ArmThickness = 0.03f;
+    [SerializeField] float m_BaseArmLengthMultiplier = 0.8f;
+    [SerializeField] float m_UpperArmLengthMultiplier = 0.3f;
+    [SerializeField] bool m_DrawDebugIKLines = true;
 
     [Header("Planet settings")]
     [SerializeField] float m_PlanetMinScale = 0.01f;
@@ -82,6 +166,11 @@ public class RobinOrrery : MonoBehaviour
         foreach (Planet planet in m_Planets)
         {
             planet.MovePlanet(fire1 ? m_FireRotationMultiplier :  fire2 ? -m_FireRotationMultiplier : 0.0f);
+        }
+
+        foreach (OrreryArm arm in m_OrreryArms)
+        {
+            arm.MoveArm(m_DrawDebugIKLines);
         }
     }
 
@@ -119,6 +208,7 @@ public class RobinOrrery : MonoBehaviour
         GenerateSunPedestal();
         GenerateSunPedestalFoot();
         GeneratePlanets();
+        GenerateNewOrreryArms();
     }
 
     private void GenerateSunPedestal()
@@ -194,7 +284,7 @@ public class RobinOrrery : MonoBehaviour
             planet.m_Scale = Random.Range(m_PlanetMinScale, m_PlanetMaxScale);
 
             float newPlanetX = planet.m_Radius;
-            planetTransform.position = new Vector3(newPlanetX, planetTransform.position.y, planetTransform.position.z);
+            planetTransform.localPosition = new Vector3(newPlanetX, planetTransform.localPosition.y, planetTransform.localPosition.z);
 
             // Set the scale
             planet.m_GameObject.transform.localScale = new Vector3(planet.m_Scale, planet.m_Scale, planet.m_Scale);
@@ -223,116 +313,67 @@ public class RobinOrrery : MonoBehaviour
         armParent.transform.localScale = new Vector3(m_ArmThickness, m_ArmThickness, m_ArmThickness);
         armParent.transform.localPosition = m_SunPedestal.transform.localPosition;
 
-        for (int i = 0; i < m_Planets.Count; ++i)
-        {
-            Planet planet = m_Planets[i];
-            OrreryArm orreryArm = new OrreryArm();
-
-            float localY = (m_ArmStartPosition + step * i);
-
-            orreryArm.m_Planet = planet;
-            orreryArm.m_GameObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            orreryArm.m_GameObject.name = $"Main arm for planet {i + 1}";
-            float x = Vector3.Distance(m_Sun.transform.position, planet.m_GameObject.transform.position);
-            Vector3 newScale = new Vector3(x,
-                                           1f,
-                                           1f);
-
-            orreryArm.m_GameObject.transform.localScale = newScale;
-            orreryArm.m_GameObject.transform.parent = armParent.transform;
-            orreryArm.m_GameObject.transform.localScale = new Vector3(
-                    orreryArm.m_GameObject.transform.localScale.x,
-                    0.3f,
-                    0.3f
-                );
-            orreryArm.m_GameObject.transform.localPosition = new Vector3(orreryArm.m_GameObject.transform.localScale.x * 0.5f, localY, 0.0f);
-
-            float y = Vector3.Distance(m_Sun.transform.position, m_SunPedestal.transform.TransformPoint(0.0f, localY, 0.0f));
-
-            orreryArm.m_ChildArm = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            orreryArm.m_ChildArm.name = $"Child arm for planet {i + 1}";
-            orreryArm.m_ChildArm.transform.localScale = new Vector3(1.0f, y, 1.0f);
-            orreryArm.m_ChildArm.transform.parent = armParent.transform;
-            orreryArm.m_ChildArm.transform.localScale = new Vector3(
-                    0.3f,
-                    orreryArm.m_ChildArm.transform.localScale.y,
-                    0.3f
-                );
-            orreryArm.m_GameObject.transform.localPosition = new Vector3(orreryArm.m_GameObject.transform.localScale.x * 0.5f, localY, 0.0f);
-        }
-    }
-     
-    private void GenerateCubeOrreryArms()
-    {
-        // Get the amount of planets in frames between two numbers
-        float step = (m_ArmStartPosition - m_ArmEndPosition) / (m_Planets.Count - 1);
-
-        // Since unity sets the rotation relative to the parents scale we need to add
-        // an empty parent with a scale of 1
-        GameObject armParent = new GameObject("ArmParent");
-        armParent.transform.parent = transform;
-        armParent.transform.localScale = new Vector3(m_ArmThickness, m_ArmThickness, m_ArmThickness);
-        armParent.transform.localPosition = m_SunPedestal.transform.localPosition;
+        // Create only for first (for testing)
+        // int i = 0;
 
         for (int i = 0; i < m_Planets.Count; ++i)
         {
             Planet planet = m_Planets[i];
-            OrreryArm orreryArm = new OrreryArm();
-
+            OrreryArm arm = new OrreryArm();
             float localY = (m_ArmStartPosition + step * i);
 
-            orreryArm.m_Planet = planet;
-            orreryArm.m_GameObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            orreryArm.m_GameObject.transform.parent = armParent.transform;
-            orreryArm.m_GameObject.name = $"Main arm for planet {i + 1}";
-            Vector3 newScale = new Vector3(planet.m_Radius * m_ArmToPlanetRadiusSizeScalar,
-                                           0.3f,
-                                           0.3f);
-            orreryArm.m_GameObject.transform.localScale = newScale;
-            orreryArm.m_GameObject.transform.localPosition = new Vector3(newScale.x * 0.5f, localY, 0.0f);
+            // Set planet
+            arm.m_Planet = planet;
+            arm.orreryTransform = transform;
 
-            Vector3 localStartPos = orreryArm.m_GameObject.transform.localPosition;
-            Vector3 armStartPos = orreryArm.m_GameObject.transform.TransformPoint(localStartPos);
-            Vector3 IKOffset = planet.m_GameObject.transform.position - armStartPos;
-            Debug.DrawLine(armStartPos, IKOffset, Color.red, 4.0f);
+            // Create a joint
+            arm.m_Joint = new GameObject(); // Create empty later, sphere for debugging.
+            arm.m_Joint.name = $"Joint for arm {i + 1}";
+            arm.m_Joint.transform.parent = armParent.transform;
 
-            orreryArm.m_ChildArm = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            orreryArm.m_ChildArm.transform.parent = armParent.transform;
-            orreryArm.m_ChildArm.name = $"Child arm for planet {i + 1}";
-            orreryArm.m_ChildArm.transform.localScale = new Vector3(5.0f, 0.3f, 0.3f);
-            orreryArm.m_ChildArm.transform.localPosition = new Vector3(newScale.x + 1.0f, localY, 0.0f);
-        }
-    }
+            Vector3 orreryWorldPlanetX = transform.TransformPoint((planet.m_Radius * 0.8f), 0.0f, 0.0f);
+            arm.m_Joint.transform.position = orreryWorldPlanetX;
 
-    private void GenerateCapsuleOrreryArms()
-    {
-        m_OrreryArms.Clear();
-        // Get the amount of planets in frames between two numbers
-        float step = (m_ArmStartPosition - m_ArmEndPosition) / (m_Planets.Count - 1);
+            Vector3 jointPosition = arm.m_Joint.transform.localPosition;
+            jointPosition.y = localY;
+            arm.m_Joint.transform.localPosition = jointPosition;
 
-        for (int i = 0; i < m_Planets.Count; ++i)
-        {
-            Planet planet = m_Planets[i];
-            OrreryArm orreryArm = new OrreryArm();
+            // Save arm start position
+            arm.m_ArmStartPosition = new Vector3(0.0f, localY, 0.0f);
 
-            float localY = (m_ArmStartPosition + step * i);
+            // Create a start joint
+            arm.m_StartJoint = new GameObject();
+            arm.m_StartJoint.name = $"Start joint for arm {i + 1}";
+            arm.m_StartJoint.transform.parent = armParent.transform;
+            arm.m_StartJoint.transform.localPosition = arm.m_ArmStartPosition;
 
-            orreryArm.m_Planet = planet;
-            orreryArm.m_GameObject = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            orreryArm.m_GameObject.transform.parent = m_SunPedestal.transform;
-            Vector3 newScale = new Vector3(planet.m_Radius * m_ArmToPlanetRadiusSizeScalar,
-                                           m_ArmThickness,
-                                           m_ArmThickness);
-            orreryArm.m_GameObject.transform.localScale = newScale;
+            // Set arm lengths
+            arm.m_BaseArmLength = planet.m_Radius * m_BaseArmLengthMultiplier;
+            arm.m_UpperArmLength = planet.m_Radius * m_UpperArmLengthMultiplier;
 
-            orreryArm.m_GameObject.transform.localPosition = new Vector3(newScale.x *0.5f, localY, 0.0f);
+            // Create arms
+            arm.m_BaseArm = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            arm.m_BaseArm.transform.parent = armParent.transform;
+            arm.m_BaseArm.name = $"Base arm for arm {i + 1}";
+            Vector3 baseArmScale = arm.m_BaseArm.transform.localScale;
+            baseArmScale.x = 0.15f;
+            baseArmScale.y = 0.15f;
+            baseArmScale.z *= arm.m_BaseArmLength;
+            arm.m_BaseArm.transform.localScale = baseArmScale;
 
-            m_OrreryArms.Add(orreryArm);
+            arm.m_UpperArm = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            arm.m_UpperArm.transform.parent = armParent.transform;
+            arm.m_UpperArm.name = $"Upper arm for arm {i + 1}";
+            Vector3 upperArmScale = arm.m_UpperArm.transform.localScale;
+            upperArmScale.x = 0.15f;
+            upperArmScale.y = 0.15f;
+            upperArmScale.z *= arm.m_UpperArmLength;
+            arm.m_UpperArm.transform.localScale = upperArmScale;
 
-            orreryArm.m_ChildArm = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            orreryArm.m_ChildArm.transform.parent = orreryArm.m_GameObject.transform;
-            orreryArm.m_ChildArm.transform.localPosition = new Vector3(0.5f, planet.m_Radius * m_ArmToPlanetRadiusSizeScalar, 0.0f);
-            orreryArm.m_ChildArm.transform.localScale = Vector3.one;
+            arm.UpdateArmPositions();
+
+            // Add to arm list
+            m_OrreryArms.Add(arm);
         }
     }
 }
