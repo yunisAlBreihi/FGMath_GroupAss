@@ -1,126 +1,8 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-class Planet
-{
-    public GameObject m_GameObject;
-    public float m_Radius;
-    public float m_Scale;
-    public float m_Angle;
-    public float m_Speed = 3.0f;
-
-    public void MovePlanet(float rotationMultiplier = 1.0f)
-    {
-        m_Angle += Time.deltaTime * m_Speed * rotationMultiplier;
-        m_GameObject.transform.localPosition = GetPositionInRadius(m_Radius, m_Angle);
-    }
-
-    private Vector3 GetPositionInRadius(float radius, float angle)
-    {
-        float posX = radius * Mathf.Cos(angle * Mathf.Deg2Rad);
-        float posZ = radius * Mathf.Sin(angle * Mathf.Deg2Rad);
-
-        return new Vector3(posX, m_GameObject.transform.localPosition.y, posZ);
-    }
-}
-
-class OrreryArm
-{
-    public Transform orreryTransform;
-
-    public GameObject m_BaseArm;
-    public GameObject m_UpperArm;
-
-    public float m_BaseArmLength;
-    public float m_UpperArmLength;
-
-    public Vector3 m_ArmStartPosition;
-    public GameObject m_Joint;
-    public GameObject m_StartJoint;
-
-    public Planet m_Planet;
-
-    public void MoveArm(bool drawDebugLines = false)
-    {
-        // Move from target (ie planet) to start | joint toward planet, start toward joint
-        if (m_Joint == null)
-        {
-            Debug.Log("Joint is null");
-        }
-        if (m_StartJoint == null)
-        {
-            Debug.Log("Startjoint is null");
-        }
-        if (m_Planet == null)
-        {
-            Debug.Log("planet is null");
-        }
-        SolveIK(m_Joint.transform, m_Planet.m_GameObject.transform, m_UpperArmLength);
-        SolveIK(m_StartJoint.transform, m_Joint.transform, m_BaseArmLength);
-
-        // Set start back to it's original pos
-        m_StartJoint.transform.localPosition = m_ArmStartPosition;
-
-        // Move from start to end | joint toward start
-        SolveIK(m_Joint.transform, m_StartJoint.transform, m_BaseArmLength);
-
-        UpdateArmPositions();
-
-        if (drawDebugLines)
-        {
-
-            // Calculate normalized vector between joint and planet
-            Vector3 dir = m_Joint.transform.position - m_Planet.m_GameObject.transform.position;
-            dir = dir.normalized;
-
-            // Start to joint
-            Debug.DrawLine(m_StartJoint.transform.position, m_Joint.transform.position, Color.green);
-            // Joint to planet
-            Debug.DrawLine(m_Joint.transform.position, m_Joint.transform.position - (dir * m_UpperArmLength), Color.red);
-        }
-    }
-
-    public void UpdateArmPositions()
-    {
-        // Calculate normalized vector between joint and planet
-        Vector3 dir = m_Joint.transform.position - m_Planet.m_GameObject.transform.position;
-        dir = dir.normalized;
-
-        SetPos(m_BaseArm.transform, m_StartJoint.transform.position, m_Joint.transform.position);
-        SetPos(m_UpperArm.transform, m_Joint.transform.position, m_Joint.transform.position - (dir * m_UpperArmLength));
-    }
-
-    private void SolveIK(Transform start, Transform target, float armLength)
-    {
-        Vector3 dir = target.position - start.position;
-
-        dir = dir.normalized;
-
-        start.position = target.position - (dir * armLength);
-    }
-
-    void SetPos(Transform transform, Vector3 start, Vector3 end)
-    {
-        Vector3 middlePoint = (start + end) * 0.5f;
-
-        transform.LookAt(end);
-        transform.position = middlePoint;
-
-
-        // transform.rotation = Quaternion.LookRotation(m_Joint.transform.localPosition - transform.localPosition, Vector3.up);
-        Debug.DrawLine(start, (start + end) * 0.5f, Color.blue);
-    }
-}
-
 public class RobinOrrery : MonoBehaviour
 {
-    GameObject m_Sun = null;
-    List<Planet> m_Planets = new List<Planet>();
-    List<OrreryArm> m_OrreryArms = new List<OrreryArm>();
-
-    GameObject m_SunPedestal = null;
-
     [Header("General settings")]
     [SerializeField] int m_NumberOfPlanet = 10;
     [SerializeField] float m_FireRotationMultiplier = 15.0f;
@@ -135,7 +17,6 @@ public class RobinOrrery : MonoBehaviour
     [Header("Orrery Arm settings")]
     [SerializeField] float m_ArmStartPosition = 0.8f;
     [SerializeField] float m_ArmEndPosition = 2.5f;
-    [SerializeField] float m_ArmToPlanetRadiusSizeScalar = 13.0f;
     [SerializeField] float m_ArmThickness = 0.03f;
     [SerializeField] float m_BaseArmLengthMultiplier = 0.8f;
     [SerializeField] float m_UpperArmLengthMultiplier = 0.3f;
@@ -149,6 +30,19 @@ public class RobinOrrery : MonoBehaviour
     [SerializeField] float m_PlanetMinSpeed = 10.0f;
     [SerializeField] float m_PlanetMaxSpeed = 20.0f;
 
+    GameObject m_Sun = null;
+    GameObject m_SunPedestal = null;
+
+    List<RobinPlanet> m_Planets = new List<RobinPlanet>();
+    List<RobinOrreryArm> m_OrreryArms = new List<RobinOrreryArm>();
+
+    float inputX = 0.0f;
+    float inputY = 0.0f;
+    bool inputRotateArmRight = false;
+    bool inputRotateArmLeft = false;
+
+
+    #region Unity Methods
     private void Awake()
     {
         GenerateOrrarySystem();
@@ -156,25 +50,56 @@ public class RobinOrrery : MonoBehaviour
 
     private void Update()
     {
-        float newX = Input.GetAxis("Horizontal") * Time.deltaTime;
-        float newY = Input.GetAxis("Vertical") * Time.deltaTime;
-        bool fire1 = Input.GetAxis("Fire1") > 0.0f;
-        bool fire2 = Input.GetAxis("Fire2") > 0.0f;
+        UpdateInput();
+        MoveOrrery();
+        MovePlanets();
+        MoveArms();
+    }
+    #endregion Unity Methods
 
-        transform.localPosition = new Vector3(transform.localPosition.x + newX, transform.localPosition.y, transform.localPosition.z + newY);
+    #region Input and Movement
+    private void UpdateInput()
+    {
+        inputX = Input.GetAxis("Horizontal") * Time.deltaTime;
+        inputY = Input.GetAxis("Vertical") * Time.deltaTime;
+        inputRotateArmRight = Input.GetAxis("Fire1") > 0.0f;
+        inputRotateArmLeft = Input.GetAxis("Fire2") > 0.0f;
+    }
 
-        foreach (Planet planet in m_Planets)
+    private void MoveOrrery()
+    {
+        transform.localPosition = new Vector3(transform.localPosition.x + inputX, transform.localPosition.y, transform.localPosition.z + inputY);
+    }
+
+    private void MovePlanets()
+    {
+        foreach (RobinPlanet planet in m_Planets)
         {
-            planet.MovePlanet(fire1 ? m_FireRotationMultiplier :  fire2 ? -m_FireRotationMultiplier : 0.0f);
+            planet.MovePlanet(inputRotateArmRight ? m_FireRotationMultiplier : inputRotateArmLeft ? -m_FireRotationMultiplier : 0.0f);
         }
+    }
 
-        foreach (OrreryArm arm in m_OrreryArms)
+    private void MoveArms()
+    {
+        foreach (RobinOrreryArm arm in m_OrreryArms)
         {
             arm.MoveArm(m_DrawDebugIKLines);
         }
     }
+    #endregion Input and Movement
 
+    #region Orrery Generation
     public void GenerateOrrarySystem()
+    {
+        DeleteCurrentOrreryParts();
+        GenerateSun();
+        GenerateSunPedestal();
+        GenerateSunPedestalFoot();
+        GeneratePlanets();
+        GenerateNewOrreryArms();
+    }
+
+    private void DeleteCurrentOrreryParts()
     {
         // Delete current solar system
         if (Application.isPlaying)
@@ -198,17 +123,15 @@ public class RobinOrrery : MonoBehaviour
             }
         }
         m_Planets.Clear();
+    }
 
+    private void GenerateSun()
+    {
         m_Sun = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         m_Sun.transform.parent = transform;
         m_Sun.transform.localScale = new Vector3(m_SunScale, m_SunScale, m_SunScale);
         m_Sun.transform.localPosition = Vector3.zero;
         m_Sun.name = "Sun";
-
-        GenerateSunPedestal();
-        GenerateSunPedestalFoot();
-        GeneratePlanets();
-        GenerateNewOrreryArms();
     }
 
     private void GenerateSunPedestal()
@@ -234,8 +157,8 @@ public class RobinOrrery : MonoBehaviour
 
         pedestalFoot.transform.localPosition = new Vector3(0.0f, -m_SunScale - m_SunPedestal.transform.localScale.y, 0.0f);
 
+        // Delete capsule collider and replace with a box collider for the foot
         CapsuleCollider capsuleCollider = pedestalFoot.GetComponent<CapsuleCollider>();
-
 
         if (capsuleCollider != null)
         {
@@ -258,11 +181,11 @@ public class RobinOrrery : MonoBehaviour
     private void GeneratePlanets()
     {
 
-        Planet lastPlanet = null;
+        RobinPlanet lastPlanet = null;
 
         for (int i = 0; i < m_NumberOfPlanet; ++i)
         {
-            Planet planet = new Planet();
+            RobinPlanet planet = new RobinPlanet();
             GameObject planetObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             Transform planetTransform = planetObject.transform;
 
@@ -318,8 +241,8 @@ public class RobinOrrery : MonoBehaviour
 
         for (int i = 0; i < m_Planets.Count; ++i)
         {
-            Planet planet = m_Planets[i];
-            OrreryArm arm = new OrreryArm();
+            RobinPlanet planet = m_Planets[i];
+            RobinOrreryArm arm = new RobinOrreryArm();
             float localY = (m_ArmStartPosition + step * i);
 
             // Set planet
@@ -376,4 +299,5 @@ public class RobinOrrery : MonoBehaviour
             m_OrreryArms.Add(arm);
         }
     }
+    #endregion Orrery Generation
 }
