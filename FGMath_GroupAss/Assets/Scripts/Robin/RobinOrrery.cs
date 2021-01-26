@@ -98,7 +98,7 @@ public class RobinOrrery : MonoBehaviour
         GenerateSunPedestal();
         GenerateSunPedestalFoot();
         GeneratePlanets();
-        GenerateOrreryArms(ref m_Planets, m_SunPedestal.transform.localPosition, transform, false);
+        GenerateOrreryArms(ref m_Planets, m_SunPedestal.transform.localPosition, transform);
     }
 
     private void DeleteCurrentOrreryParts()
@@ -268,12 +268,12 @@ public class RobinOrrery : MonoBehaviour
             planet.m_Moons.Add(moon);
         }
         
-        GenerateOrreryArms(ref planet.m_Moons, new Vector3(0.0f, 0.5f, 0.0f), planet.m_GameObject.transform);
+        GenerateOrreryArms(ref planet.m_Moons, new Vector3(0.0f, 0.5f, 0.0f), planet.m_GameObject.transform, true);
     }
     #endregion Planets and Moons
 
     #region OrreryArms
-    private void GenerateOrreryArms(ref List<RobinPlanet> planets, Vector3 armParentPosition, Transform armParentTransform, bool clearArmList = true)
+    private void GenerateOrreryArms(ref List<RobinPlanet> planets, Vector3 armParentPosition, Transform armParentTransform, bool overrideYOffsetForMoons = false)
     {
         // Get the amount of planets in frames between two numbers
         float step = (m_ArmStartPosition - m_ArmEndPosition) / (m_Planets.Count - 1);
@@ -294,7 +294,7 @@ public class RobinOrrery : MonoBehaviour
             RobinOrreryArm arm = new RobinOrreryArm();
             float localY = (m_ArmStartPosition + step * i);
 
-            if (clearArmList)
+            if (overrideYOffsetForMoons)
             {
                 localY = -0.3f;
             }
@@ -308,11 +308,6 @@ public class RobinOrrery : MonoBehaviour
             arm.m_Joint.transform.parent = armParent.transform;
 
             float distanceBetweenPlanetAndStart = Vector3.Distance(new Vector3(0.0f, localY, 0.0f), planet.m_GameObject.transform.position);
-
-            if (clearArmList)
-            {
-                Debug.Log($"Planet {i + 1}, Dist: {distanceBetweenPlanetAndStart}");
-            }
 
             Vector3 orreryWorldPlanetX = armParentTransform.TransformPoint(distanceBetweenPlanetAndStart, 0.0f, 0.0f);
             arm.m_Joint.transform.position = orreryWorldPlanetX;
@@ -328,16 +323,7 @@ public class RobinOrrery : MonoBehaviour
             arm.m_StartJoint = new GameObject();
             arm.m_StartJoint.name = $"Start joint for arm {i + 1}";
             arm.m_StartJoint.transform.parent = armParent.transform;
-            if (clearArmList)
-            {
-                Debug.Log(arm.m_ArmStartPosition);
-            }
             arm.m_StartJoint.transform.localPosition = arm.m_ArmStartPosition;
-
-            if (clearArmList)
-            {
-                Debug.Log(arm.m_StartJoint.transform.localPosition);
-            }
 
             // Set arm lengths
             arm.m_BaseArmLength = planet.m_Radius * m_BaseArmLengthMultiplier * armParentTransform.localScale.x;
