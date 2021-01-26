@@ -6,6 +6,7 @@ public class RobinIK : MonoBehaviour
 {
     [SerializeField] private float m_ArmLength = 3.0f;
     [SerializeField] private int m_NumberOfJoints = 3;
+    [SerializeField] private Transform m_TargetTransform;
 
     private GameObject m_IKStart;
     private GameObject m_TargetLocation;
@@ -17,6 +18,11 @@ public class RobinIK : MonoBehaviour
     {
         SetupIK();
         m_BasePosition = m_IKStart.transform.position;
+        
+        if (m_TargetTransform != null)
+        {
+            m_TargetLocation.transform.position = (m_TargetTransform.position + Vector3.up);
+        }
     }
 
     void SetupIK()
@@ -47,17 +53,20 @@ public class RobinIK : MonoBehaviour
         m_IKStart.transform.parent = transform;
         m_IKStart.transform.localPosition = Vector3.zero;
         m_IKStart.name = "IK Start Position";
+        m_IKStart.transform.localScale = Vector3.one;
 
         m_TargetLocation = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         m_TargetLocation.transform.parent = transform;
         m_TargetLocation.transform.localPosition = Vector3.zero;
         m_TargetLocation.name = "IK Target Location";
+        m_TargetLocation.transform.localScale = Vector3.one;
 
         for (int i = 0; i < m_NumberOfJoints; i++)
         {
             GameObject joint = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             joint.transform.parent = transform;
             joint.transform.localPosition = Vector3.zero;
+            joint.transform.localScale = Vector3.one;
             joint.name = $"Joint {i + 1}";
 
             m_Joints.Add(joint);
@@ -75,13 +84,13 @@ public class RobinIK : MonoBehaviour
         start.position = target.position - (dir * m_ArmLength);
     }
 
-    private float DistanceFromTarget(float[] angles)
-    {
-        return 0.0f;
-    }
-
     void Update()
     {
+        if (m_TargetTransform != null)
+        {
+            m_TargetLocation.transform.position = (m_TargetTransform.position + Vector3.up);
+        }
+
         // First iteration, from target to start
         Transform current = m_Joints[m_NumberOfJoints - 1].transform;
         Transform currentTarget = m_TargetLocation.transform;
@@ -124,23 +133,6 @@ public class RobinIK : MonoBehaviour
         /////////////////////////
 
         Debug.DrawLine(m_Joints[m_NumberOfJoints - 1].transform.position, m_Joints[m_NumberOfJoints - 1].transform.position - (dir * m_ArmLength), Color.red);
-
-        /*
-        SolveIK(m_Joints[0].transform, m_TargetLocation.transform);
-        SolveIK(m_IKStart.transform, m_Joints[0].transform);
-
-        m_IKStart.transform.position = m_BasePosition;
-        SolveIK(m_Joints[0].transform, m_IKStart.transform);
-
-        // Just for debugdrawing
-        Vector3 dir = m_Joints[0].transform.position - m_TargetLocation.transform.position;
-
-        dir = dir.normalized;
-        /////////////////////////
-
-        Debug.DrawLine(m_IKStart.transform.position, m_Joints[0].transform.position, Color.green);
-        Debug.DrawLine(m_Joints[0].transform.position, m_Joints[0].transform.position - (dir * m_ArmLength), Color.red);
-        */
     }
 
     private void OnValidate()
