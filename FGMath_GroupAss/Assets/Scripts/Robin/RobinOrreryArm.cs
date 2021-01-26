@@ -4,8 +4,6 @@ using UnityEngine;
 
 class RobinOrreryArm
 {
-    public Transform orreryTransform;
-
     public GameObject m_BaseArm;
     public GameObject m_UpperArm;
 
@@ -51,8 +49,11 @@ class RobinOrreryArm
         Vector3 dir = m_Joint.transform.position - m_Planet.m_GameObject.transform.position;
         dir = dir.normalized;
 
-        UpdateArmMesh(m_BaseArm.transform, m_StartJoint.transform.position, m_Joint.transform.position);
-        UpdateArmMesh(m_UpperArm.transform, m_Joint.transform.position, m_Joint.transform.position - (dir * m_UpperArmLength));
+        if (m_BaseArm != null && m_UpperArm != null)
+        {
+            UpdateArmMesh(m_BaseArm.transform, m_StartJoint.transform.position, m_Joint.transform.position);
+            UpdateArmMesh(m_UpperArm.transform, m_Joint.transform.position, m_Joint.transform.position - (dir * m_UpperArmLength));
+        }
     }
 
     private void SolveIK(Transform start, Transform target, float armLength)
