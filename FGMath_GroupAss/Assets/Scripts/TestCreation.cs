@@ -12,9 +12,8 @@ public class TestCreation : MonoBehaviour
 
     int m_numPlanets = 4;
     int m_numMoons = 3;
-
+    [SerializeField, Range(0, 1)] float percentageBetweenPlanets = 1;
     List<Planet> m_planets = new List<Planet>();
-
 
     // Start is called before the first frame update
     void Start()
@@ -38,7 +37,7 @@ public class TestCreation : MonoBehaviour
             {
                 float t_posXOffset = (j + 1) * t_moonRadius;
 
-                t_offsetFromPlanet += t_moonRadius + t_separatorSize;
+                t_offsetFromPlanet += (t_moonRadius + t_separatorSize) * percentageBetweenPlanets;
 
                 m_planets[i].m_moons.Add(CreatePlanet(m_planets[i].m_body.transform, t_moonRadius, t_offsetFromPlanet));
             }
